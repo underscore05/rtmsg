@@ -1,0 +1,31 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+# An example controller showing a sample home page
+GET     /                           controllers.HomeController.index
+# An example controller showing how to use dependency injection
+GET     /count                      controllers.CountController.count
+# An example controller showing how to write asynchronous code
+GET     /message                    controllers.AsyncController.message
+
+# Map static resources from the /public folder to the /assets URL path
+GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
+
+# Globelabs web-hooks
+# Callback whenever a subscribers opted-out from Globelabs
+POST    /gl/opt-in-out                  controllers.GlobelabsSmsController.optOut
+# Callback whenever a subscribers tries to opt-in to Globelabs, return other than 200 will make the access_token void
+GET     /gl/opt-in-out                  controllers.GlobelabsSmsController.optIn(subscriber_number: String, access_token: tables.AccessToken)
+# Callback whenever a subscribers sends a message
+POST    /gl/deliver-sms                 controllers.GlobelabsSmsController.deliverSms
+
+GET     /gl/send-sms                    controllers.GlobelabsSmsController.sendSms(msisdn: String, message: String)
+
+
+
+# Account Module
+POST    /account/register               controllers.AccountController.register
+GET     /account/verify-email           controllers.AccountController.verifyEmail(token: String)
+POST    /account/verify-email/resend    controllers.AccountController.resendVerificationEmail
+
