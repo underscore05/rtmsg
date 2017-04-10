@@ -8,8 +8,7 @@ import javax.inject.{Inject, Singleton}
 
 import dao.PlatformSettingsDAO
 import pdi.jwt.{Jwt, JwtAlgorithm, JwtClaim, JwtJson}
-import play.api.Logger
-import play.api.libs.json.{JsObject, Json}
+import play.api.libs.json.JsObject
 import sun.security.rsa.RSAPrivateCrtKeyImpl
 import tables.PlatformSetting
 
@@ -29,9 +28,7 @@ class JwtService @Inject()(platformSettingsDAO: PlatformSettingsDAO)
 
   def generateJwt(claim: JsObject, ttl: Long): Future[String] = {
     val claims = JwtClaim(claim.toString).expiresAt(Instant.now().plusSeconds(ttl).getEpochSecond)
-    getPrivateKey.map { privateKey =>
-      Jwt.encode(claims, privateKey, JwtAlgorithm.RS512)
-    }
+    getPrivateKey.map { privateKey => Jwt.encode(claims, privateKey, JwtAlgorithm.RS512) }
   }
 
   def validateJwt(jwtToken: String): Future[Try[JsObject]] = {

@@ -9,13 +9,13 @@ import drivers.DatabaseDriver.api._
   */
 class SubscriberTable(tag: Tag) extends Table[Subscriber](tag, "subscribers") {
 
-  override def * = (subscriberId, msisdn, shortcode, createdAt) <> (Subscriber.tupled, Subscriber.unapply)
+  override def * = (subscriberId, msisdn, shortcodeId, createdAt) <> (Subscriber.tupled, Subscriber.unapply)
 
   def subscriberId = column[SubscriberId]("subscriber_id", O.PrimaryKey, O.AutoInc)
 
   def msisdn = column[String]("msisdn")
 
-  def shortcode = column[String]("shortcode")
+  def shortcodeId = column[String]("shortcode_id")
 
   def createdAt = column[Instant]("created_at")
 
@@ -23,5 +23,5 @@ class SubscriberTable(tag: Tag) extends Table[Subscriber](tag, "subscribers") {
 
 case class Subscriber(subscriberId: SubscriberId,
                       msisdn: String,
-                      shortcode: String,
+                      shortcodeId: ShortcodeId,
                       createdAt: Instant = Instant.now)

@@ -8,6 +8,7 @@ import slick.driver.JdbcProfile
 import tables.{GlobelabsSubscriber, _}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 /**
   * Created by richardroque on Apr/01/2017.
@@ -19,8 +20,8 @@ class GlobelabsSubscribersDAO @Inject()(databaseConfigProvider: DatabaseConfigPr
   val globelabsSubscriberQuery = TableQuery[GlobelabsSubscribersTable]
   val subscriberQuery = TableQuery[SubscriberTable]
 
-  def insert(data: GlobelabsSubscriber): Future[Option[SubscriberId]] = {
-    db.run((globelabsSubscriberQuery += data).map(_ => data.subscriber.subscriberId).asTry).map(_.toOption)
+  def insert(data: GlobelabsSubscriber): Future[Try[SubscriberId]] = {
+    db.run((globelabsSubscriberQuery += data).map(_ => data.subscriber.subscriberId).asTry)
   }
 
   def get(subscriberId: SubscriberId): Future[Option[GlobelabsSubscriber]] = {
@@ -31,11 +32,11 @@ class GlobelabsSubscribersDAO @Inject()(databaseConfigProvider: DatabaseConfigPr
     db.run(globelabsSubscriberQuery.filter(_.subscriberId === subscriberId).delete).map(_ => true)
   }
 
-  def getByShortcodeAndMsisdn(shortcode: String, msisdn: String): Future[Option[GlobelabsSubscriber]] = {
-    db.run(globelabsSubscriberQuery.filter(s => s.shortcode === shortcode && s.msisdn === msisdn).result.headOption)
+  def getByShortcodeAndMsisdn(shortcodeId: ShortcodeId, msisdn: String): Future[Option[GlobelabsSubscriber]] = {
+    db.run(globelabsSubscriberQuery.filter(s => s.shortcodeId === shortcodeId && s.msisdn === msisdn).result.headOption)
   }
 
-  def insertWithSubscriber(data: GlobelabsSubscriber): Future[Option[SubscriberId]] = {
+  def insertWithSubscriber(data: GlobelabsSubscriber): Future[Try[SubscriberId]] = {
     val insertQuery = for {
       newSubscriberId <- (subscriberQuery returning subscriberQuery.map(_.subscriberId)) += data.subscriber
       _ <- {
@@ -43,7 +44,7 @@ class GlobelabsSubscribersDAO @Inject()(databaseConfigProvider: DatabaseConfigPr
         globelabsSubscriberQuery += data.copy(subscriber = newSubscriber)
       }
     } yield newSubscriberId
-    db.run(insertQuery.transactionally.asTry).map(_.toOption)
+    db.run(insertQuery.transactionally.asTry)
   }
 
 }

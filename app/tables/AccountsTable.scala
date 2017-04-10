@@ -9,7 +9,7 @@ import drivers.DatabaseDriver.api._
   */
 class AccountsTable(tag: Tag) extends Table[Account](tag, "accounts") {
 
-  override def * = (accountId, name, username, password, email, isEmailVerified, createdAt) <> (Account.tupled, Account.unapply)
+  override def * = (accountId, name, username, password, email, isEmailVerified, isActive, createdAt) <> (Account.tupled, Account.unapply)
 
   def accountId = column[AccountId]("account_id", O.PrimaryKey, O.AutoInc)
 
@@ -19,11 +19,13 @@ class AccountsTable(tag: Tag) extends Table[Account](tag, "accounts") {
 
   def password = column[String]("password")
 
-  def createdAt = column[Instant]("created_at")
-
   def email = column[String]("email")
 
   def isEmailVerified = column[Boolean]("is_email_verified")
+
+  def isActive = column[Boolean]("is_active")
+
+  def createdAt = column[Instant]("created_at")
 
 }
 
@@ -33,4 +35,5 @@ case class Account(accountId: AccountId,
                    password: String,
                    email: String,
                    isEmailVerified: Boolean = false,
+                   isActive: Boolean = true,
                    createdAt: Instant = Instant.now)

@@ -23,7 +23,8 @@ libraryDependencies ++= Seq(
   "com.rabbitmq" % "amqp-client" % "4.1.0",
   "org.mindrot" % "jbcrypt" % "0.4",
 
-  "com.pauldijou" %% "jwt-play-json" % "0.7.1"
+  "com.pauldijou" %% "jwt-play-json" % "0.7.1",
+  "se.radley" % "play-plugins-enumeration_2.10" % "1.1.0"
 )
 
 parallelExecution in IntegrationTest := false

@@ -8,9 +8,10 @@ import play.api.Logger
 import play.api.libs.json.Json
 import play.api.libs.ws.WSClient
 import requests.globelabs.{GlobelabsOutgoingSmsMessageRequest, GlobelabsOutgoingSmsPayloadRequest, GlobelabsOutgoingSmsRequest}
-import tables.{AccessToken, GlobelabsSubscriber, Subscriber}
+import tables._
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 /**
   * Created by richardroque on Apr/01/2017.
@@ -21,7 +22,7 @@ class GlobelabsSmsService @Inject()(globelabsSubscriberDAO: GlobelabsSubscribers
                                     ws: WSClient
                                    )(implicit ec: ExecutionContext) {
 
-  def optIn(shortcode: String, msisdn: String, accessToken: AccessToken) = {
+  def optIn(shortcode: String, msisdn: String, accessToken: AccessToken): Future[Try[SubscriberId]] = {
     val subscriber = Subscriber(0L, msisdn, shortcode)
     val globelabsSubscriber = GlobelabsSubscriber(subscriber, accessToken)
     globelabsSubscriberDAO.insertWithSubscriber(globelabsSubscriber)
@@ -33,8 +34,8 @@ class GlobelabsSmsService @Inject()(globelabsSubscriberDAO: GlobelabsSubscribers
     subscriberDAO.deleteByMsisdnAndShortcode(msisdn, shortcode)
   }
 
-  def sendMessage(shortcode: String, msisdn: String, message: String) = {
-    globelabsSubscriberDAO.getByShortcodeAndMsisdn(shortcode, msisdn) flatMap {
+  def sendMessage(shortcodeId: ShortcodeId, msisdn: String, message: String) = {
+    globelabsSubscriberDAO.getByShortcodeAndMsisdn(shortcodeId, msisdn) flatMap {
       case Some(globelabsSubscriber) => callGlobelabsSmsAPI(globelabsSubscriber, message).map { _ => true }
       case _ => Future.successful(false)
     }
@@ -46,12 +47,12 @@ class GlobelabsSmsService @Inject()(globelabsSubscriberDAO: GlobelabsSubscribers
     val payload = GlobelabsOutgoingSmsRequest(outboundSMSMessageRequest =
       GlobelabsOutgoingSmsPayloadRequest(
         clientCorrelator = UUID.randomUUID().toString,
-        senderAddress = subscriber.shortcode,
+        senderAddress = subscriber.shortcodeId,
         outboundSMSTextMessage = GlobelabsOutgoingSmsMessageRequest(message = message),
         address = subscriber.msisdn
       )
     )
-    val url = s"$globelabsUrl/smsmessaging/v1/outbound/${subscriber.shortcode}/requests?access_token=${globelabsSubscriber.accessToken}"
+    val url = s"$globelabsUrl/smsmessaging/v1/outbound/${subscriber.shortcodeId}/requests?access_token=${globelabsSubscriber.accessToken}"
     ws.url(url).post(Json.toJson(payload)).map { res =>
       Logger.info("URL:" + url)
       Logger.info("Response:" + res)

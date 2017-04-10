@@ -5,7 +5,7 @@ import javax.inject.Inject
 import drivers.DatabaseDriver.api._
 import play.api.db.slick.DatabaseConfigProvider
 import slick.driver.JdbcProfile
-import tables.{Subscriber, SubscriberId, SubscriberTable}
+import tables.{ShortcodeId, Subscriber, SubscriberId, SubscriberTable}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -29,9 +29,9 @@ class SubscribersDAO @Inject()(databaseConfigProvider: DatabaseConfigProvider)(i
     ???
   }
 
-  def deleteByMsisdnAndShortcode(msisdn: String, shortcode: String): Future[Boolean] ={
+  def deleteByMsisdnAndShortcode(msisdn: String, shortcodeId: ShortcodeId): Future[Boolean] ={
     val deletedSubscriberQuery = subscriberQuery.filter(s => {
-      s.msisdn === msisdn && s.shortcode === shortcode
+      s.msisdn === msisdn && s.shortcodeId === shortcodeId
     })
     db.run(deletedSubscriberQuery.delete).map(_ > 0)
   }

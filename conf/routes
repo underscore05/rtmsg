@@ -28,4 +28,8 @@ GET     /gl/send-sms                    controllers.GlobelabsSmsController.sendS
 POST    /account/register               controllers.AccountController.register
 GET     /account/verify-email           controllers.AccountController.verifyEmail(token: String)
 POST    /account/verify-email/resend    controllers.AccountController.resendVerificationEmail
+POST    /account/login                  controllers.AccountController.login
+
+# Shortcode Module
+
 

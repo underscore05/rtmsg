@@ -11,13 +11,13 @@ class GlobelabsSubscribersTable(tag: Tag) extends Table[GlobelabsSubscriber](tag
 
   override def * = (subscriberShape, accessToken) <> (GlobelabsSubscriber.tupled, GlobelabsSubscriber.unapply)
 
-  def subscriberShape = (subscriberId, msisdn, shortcode, createdAt) <> (Subscriber.tupled, Subscriber.unapply)
+  def subscriberShape = (subscriberId, msisdn, shortcodeId, createdAt) <> (Subscriber.tupled, Subscriber.unapply)
 
   def subscriberId = column[SubscriberId]("subscriber_id", O.PrimaryKey)
 
   def msisdn = column[String]("msisdn")
 
-  def shortcode = column[String]("shortcode")
+  def shortcodeId = column[ShortcodeId]("shortcode_id")
 
   def createdAt = column[Instant]("created_at")
 

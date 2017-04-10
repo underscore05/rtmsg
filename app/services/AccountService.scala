@@ -1,21 +1,31 @@
 package services
 
-import javax.inject.Inject
+import java.time._
+import java.time.temporal._
+import javax.inject.{Inject, Singleton}
 
 import dao.AccountsDAO
+import filters.UserIdentity
 import org.mindrot.jbcrypt.BCrypt
+import play.api.cache.{CacheApi, _}
 import play.api.libs.json.{JsObject, Json}
 import play.api.libs.mailer.{Email, MailerClient}
-import requests.accounts._
+import requests.account._
+import requests.account.AccountRequests._
 import tables.{Account, AccountId}
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 /**
   * Created by richardroque on Mar/31/2017.
   */
-class AccountService @Inject()(accountsDAO: AccountsDAO, jwtService: JwtService, mailerClient: MailerClient)
+@Singleton
+class AccountService @Inject()(accountsDAO: AccountsDAO,
+                               jwtService: JwtService,
+                               mailerClient: MailerClient,
+                               @NamedCache("email-verification-cache") cache: CacheApi)
                               (implicit ec: ExecutionContext) {
 
   def register(req: RegisterAccountRequest): Future[Try[AccountId]] = {
@@ -27,7 +37,7 @@ class AccountService @Inject()(accountsDAO: AccountsDAO, jwtService: JwtService,
       _ <- {
         accountId match {
           case Success(aId) =>
-            val payload = VerifyAccountEmailRequest(verifyEmail = true, aId, req.email)
+            val payload = VerifyAccountEmailRequest(verifyEmail = true, aId)
             for {
               verificationToken <- jwtService.generateJwt(Json.toJson(payload).as[JsObject], 300)
               _ <- Future {
@@ -43,41 +53,52 @@ class AccountService @Inject()(accountsDAO: AccountsDAO, jwtService: JwtService,
   }
 
   def resendVerificationEmail(req: ResendEmailVerificationRequest): Future[Try[Boolean]] = {
-    // TODO: Add check to avoid spamming of email
-    for {
-      maybeAccount <- accountsDAO.findByEmail(req.email)
-      result <- {
-        maybeAccount match {
-          case Some(account) if !account.isEmailVerified => {
-            val payload = VerifyAccountEmailRequest(verifyEmail = true, account.accountId, req.email)
-            for {
-              verificationToken <- jwtService.generateJwt(Json.toJson(payload).as[JsObject], 300)
-              _ <- Future {
-                val body = s"You verification token is $verificationToken"
-                val email = Email("Verify Email", "dev.rroque@gmail.com", Seq(req.email), Some(body))
-                mailerClient.send(email)
-              }
-            } yield Success(true)
-          }
-          case Some(account) => Future.successful(Failure(new Exception("Already verified.")))
-          case _ => Future.successful(Success(true))
-        }
+    cache.get[Instant](req.email) match {
+      case Some(lastEmailVerification) => {
+        val windowTime = ChronoUnit.SECONDS.between(Instant.now, lastEmailVerification) + 60
+        Future.successful(Failure(new Exception(s"Please resend email verification after $windowTime seconds.")))
       }
-    } yield result
+      case _ =>
+        cache.set(req.email, Instant.now, 60.seconds)
+        for {
+          maybeAccount <- accountsDAO.getByEmail(req.email)
+          result <- {
+            maybeAccount match {
+              case Some(account) if !account.isEmailVerified => {
+                val payload = VerifyAccountEmailRequest(verifyEmail = true, account.accountId)
+                for {
+                  verificationToken <- jwtService.generateJwt(Json.toJson(payload).as[JsObject], 300)
+                  _ <- Future {
+                    val body = s"You verification token is $verificationToken"
+                    val email = Email("Verify Email", "dev.rroque@gmail.com", Seq(req.email), Some(body))
+                    mailerClient.send(email)
+                  }
+                } yield Success(true)
+              }
+              case Some(account) => Future.successful(Failure(new Exception("Already verified.")))
+              case _ => Future.successful(Success(true))
+            }
+          }
+        } yield result
+    }
   }
 
   def login(req: LoginAccountRequest): Future[Try[String]] = {
-    // TODO: Check if user email is already verified
     for {
-      someAccount <- accountsDAO.findByUsername(req.username)
-      someAccountToken <- Future {
-        someAccount match {
-          case Some(account) if BCrypt.checkpw(req.password, account.password) =>  {
-            // TODO: Generate token
-            Success("somestring")
+      someAccount <- accountsDAO.getByUsername(req.username)
+      someAccountToken <- someAccount match {
+        case Some(account) if BCrypt.checkpw(req.password, account.password) => {
+          if (account.isActive) {
+            if (account.isEmailVerified) {
+              jwtService.generateJwt(Json.toJson(UserIdentity(account.accountId, req.username)).as[JsObject], 600).map { s => Success(s) }
+            } else {
+              Future.successful(Failure(new Exception("Please verify your email before logging-in")))
+            }
+          } else {
+            Future.successful(Failure(new Exception("It looks like your account has been deactivated. Please contact your administrator.")))
           }
-          case _ => Failure(new Exception("Incorrect username and password"))
         }
+        case _ => Future.successful(Failure(new Exception("Incorrect username and password")))
       }
     } yield someAccountToken
   }
@@ -93,7 +114,7 @@ class AccountService @Inject()(accountsDAO: AccountsDAO, jwtService: JwtService,
         validationResult match {
           case Success(jsObj) =>
             jsObj.validate[VerifyAccountEmailRequest].map { req =>
-              accountsDAO.updateEmailVerification(req.accountId, req.email, isEmailVerified = true)
+              accountsDAO.updateEmailVerification(req.accountId, isEmailVerified = true)
             } recoverTotal { parsingError =>
               Future.successful(Failure(new Exception))
             }
@@ -103,6 +124,22 @@ class AccountService @Inject()(accountsDAO: AccountsDAO, jwtService: JwtService,
     } yield updateResult
   }
 
+  def refreshToken(req: UserIdentity): Future[Try[String]] = {
+    for {
+      someAccount <- accountsDAO.get(req.accountId)
+      someAccountToken <- someAccount match {
+        case Some(account) =>
+          if (account.isActive) {
+            jwtService.generateJwt(Json.toJson(UserIdentity(req.accountId, req.username)).as[JsObject], 600).map { s => Success(s) }
+          } else {
+            Future.successful(Failure(new Exception("It looks like your account has been deactivated. Please contact your administrator.")))
+          }
+        case _ =>
+          // Note: This shouldn't happen except that the user has been deleted from our database.
+          Future.successful(Failure(new Exception("User no longer exists")))
+      }
+    } yield someAccountToken
+  }
 }
 
 
